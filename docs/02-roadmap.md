@@ -1,4 +1,4 @@
-# Roadmap
+#Roadmap
 
 ## Milestone 0: Repo Scaffold (now)
 - CMake builds C++ app (`renderer`).
@@ -26,4 +26,3 @@
 ## Milestone 5: Demo Scene
 - Load `assets/models/peaches_castle.obj`
 - Load Mario model (format TBD later)
-

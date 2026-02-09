@@ -1,8 +1,11 @@
 #include "app/app_types.hpp"
 #include "app/cli.hpp"
 #include "app/game.hpp"
+#include "app/hud.hpp"
 #include "app/input.hpp"
+#include "app/present.hpp"
 #include "app/render.hpp"
+#include "app/settings.hpp"
 #include "app/sim.hpp"
 
 #include "sr/gfx/depthbuffer.hpp"
@@ -22,6 +25,7 @@ int main(int argc, char** argv) {
     app::AppConfig cfg;
     app::AppToggles toggles;
     app::FpsCounter fps;
+    app::Settings settings;
 
     if (!app::parse_cli(argc, argv, cfg, toggles))
         return 0;
@@ -42,7 +46,7 @@ int main(int argc, char** argv) {
         return 1;
 
     sr::assets::AssetStore store(app.renderer());
-    app::Game game = app::init_game(store);
+    app::Game game = app::init_game(store, settings);
 
     // Apply initial mouse mode.
     app::input_init(toggles);
@@ -66,11 +70,14 @@ int main(int argc, char** argv) {
         }
 
         const uint8_t* keys = SDL_GetKeyboardState(nullptr);
-        app::step_game(game, toggles, keys, dt, in.mouse_dx, in.mouse_dy);
+        app::step_game(game, settings, toggles, keys, dt, in.mouse_dx, in.mouse_dy);
 
         fps.tick(dt);
         app::render_game(renderer, fb, game, toggles, &fps);
-        app::present(app.renderer(), screen, fb, app.width(), app.height());
+        app::hud_draw(fb, toggles, fps);
+        app::upload_framebuffer(screen, fb);
+        app::present_texture(app.renderer(), screen, app.width(), app.height(), fb.width(),
+                             fb.height());
     }
 
     SDL_DestroyTexture(screen);

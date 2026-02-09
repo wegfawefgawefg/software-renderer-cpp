@@ -2,6 +2,7 @@
 
 #include "app/util.hpp"
 
+#include "sr/assets/fbx_skinned_model_loader.hpp"
 #include "sr/assets/gltf_model_loader.hpp"
 #include "sr/assets/obj_model_loader.hpp"
 
@@ -10,6 +11,11 @@
 namespace app {
 
 Game init_game(sr::assets::AssetStore& store) {
+    Settings settings;
+    return init_game(store, settings);
+}
+
+Game init_game(sr::assets::AssetStore& store, const Settings& settings) {
     Game g;
 
     g.castle = std::make_shared<sr::assets::Model>(
@@ -20,13 +26,25 @@ Game init_game(sr::assets::AssetStore& store) {
                                        .double_sided = false,
                                    }));
 
-    g.mario = std::make_shared<sr::assets::Model>(sr::assets::load_gltf_model(
-        "./assets/models/mario-64-mario/source/prototype_mario_super_mario_64/scene.gltf", store,
-        sr::assets::GltfModelLoadOptions{
-            .flip_v = false,
+    // Animated player (Kenney pack). This gives us a real skeleton + clips (FBX).
+    g.player_skin = std::make_shared<sr::assets::SkinnedModel>(sr::assets::load_fbx_skinned_model(
+        "./assets/models/kenney/characterMedium.fbx", store,
+        sr::assets::FbxSkinnedModelLoadOptions{
+            .flip_v = true,
             .front_face_ccw = true,
             .double_sided = false,
+            .override_diffuse_texture = "./assets/textures/kenney/survivorMaleB.png",
         }));
+    g.anim_idle = sr::assets::load_fbx_animation_clip("./assets/anims/kenney/idle.fbx",
+                                                      g.player_skin->skeleton, "idle", 30.0f);
+    g.anim_run = sr::assets::load_fbx_animation_clip("./assets/anims/kenney/run.fbx",
+                                                     g.player_skin->skeleton, "run", 30.0f);
+    g.anim_jump = sr::assets::load_fbx_animation_clip("./assets/anims/kenney/jump.fbx",
+                                                      g.player_skin->skeleton, "jump", 30.0f);
+
+    g.fov = settings.fov_deg * 3.14159265f / 180.0f;
+    g.z_near = settings.z_near;
+    g.z_far = settings.z_far;
 
     // Castle entity transform matches AFR scaling:
     // - Mario height becomes 1.0 world unit ("1 meter")
@@ -35,7 +53,7 @@ Game init_game(sr::assets::AssetStore& store) {
     sr::math::Vec3 castle_mn, castle_mx;
     app::compute_bounds(g.castle->mesh.positions, castle_mn, castle_mx);
     float castle_w = std::max(1e-6f, castle_mx.x - castle_mn.x);
-    float castle_scale = 100.0f / castle_w;
+    float castle_scale = settings.castle_width_marios * settings.mario_height_units / castle_w;
     sr::math::Vec3 castle_center{
         (castle_mn.x + castle_mx.x) * 0.5f,
         (castle_mn.y + castle_mx.y) * 0.5f,
@@ -56,39 +74,40 @@ Game init_game(sr::assets::AssetStore& store) {
     castle_ent.transform = castle_xform;
     g.scene.entities.push_back(castle_ent);
 
-    sr::scene::Entity mario_ent;
-    mario_ent.model = g.mario;
-    mario_ent.transform = sr::math::Mat4::identity();
-    g.scene.entities.push_back(mario_ent);
+    sr::scene::Entity player_ent;
+    player_ent.model = g.player_skin->model;
+    player_ent.transform = sr::math::Mat4::identity();
+    g.scene.entities.push_back(player_ent);
 
     // Build collider from the scaled/recentered castle.
     g.world_col.build_from_model(*g.castle, castle_xform,
                                  sr::physics::TriangleMeshCollider::BuildOptions{
-                                     .cell_size = 1.25f,
+                                     .cell_size = settings.collider_cell_size,
                                      .two_sided = false,
                                  });
 
-    // Mario model correction: scale to 1.0 unit tall and pivot at bottom-center.
-    sr::math::Vec3 mario_mn, mario_mx;
-    app::compute_bounds(g.mario->mesh.positions, mario_mn, mario_mx);
-    float mario_h = std::max(1e-6f, mario_mx.y - mario_mn.y);
-    float mario_scale = 1.0f / mario_h;
-    sr::math::Vec3 mario_pivot{
-        (mario_mn.x + mario_mx.x) * 0.5f,
-        mario_mn.y,
-        (mario_mn.z + mario_mx.z) * 0.5f,
+    // Player model correction: scale to 1.0 unit tall and pivot at bottom-center.
+    const auto& player_mesh = g.player_skin->model->mesh;
+    sr::math::Vec3 p_mn, p_mx;
+    app::compute_bounds(player_mesh.positions, p_mn, p_mx);
+    float p_h = std::max(1e-6f, p_mx.y - p_mn.y);
+    float p_scale = settings.mario_height_units / p_h;
+    sr::math::Vec3 p_pivot{
+        (p_mn.x + p_mx.x) * 0.5f,
+        p_mn.y,
+        (p_mn.z + p_mx.z) * 0.5f,
     };
-    sr::math::Vec3 mario_pivot_t{
-        -mario_pivot.x * mario_scale,
-        -mario_pivot.y * mario_scale,
-        -mario_pivot.z * mario_scale,
+    sr::math::Vec3 p_pivot_t{
+        -p_pivot.x * p_scale,
+        -p_pivot.y * p_scale,
+        -p_pivot.z * p_scale,
     };
-    g.mario_model_offset =
-        sr::math::mul(sr::math::Mat4::translate(mario_pivot_t),
-                      sr::math::Mat4::scale(sr::math::Vec3{mario_scale, mario_scale, mario_scale}));
+    g.player_model_offset =
+        sr::math::mul(sr::math::Mat4::translate(p_pivot_t),
+                      sr::math::Mat4::scale(sr::math::Vec3{p_scale, p_scale, p_scale}));
 
     // Player.
-    g.player.radius = 0.35f;
+    g.player.radius = settings.player_radius;
     g.player.yaw = 3.14159265f;
     g.player.pitch = -0.25f;
 

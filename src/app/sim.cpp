@@ -1,5 +1,6 @@
 #include "app/sim.hpp"
 
+#include "sr/anim/skinning.hpp"
 #include "sr/math/mat4.hpp"
 
 #include <SDL2/SDL.h>
@@ -9,9 +10,9 @@
 
 namespace app {
 
-void step_game(Game& g, const AppToggles& toggles, const uint8_t* keys, float dt, int mouse_dx,
-               int mouse_dy) {
-    dt = std::min(dt, 0.05f);
+void step_game(Game& g, const Settings& settings, const AppToggles& toggles, const uint8_t* keys,
+               float dt, int mouse_dx, int mouse_dy) {
+    dt = std::min(dt, settings.max_dt);
 
     if (toggles.mouse_look)
         g.player.apply_mouse(mouse_dx, mouse_dy);
@@ -39,10 +40,10 @@ void step_game(Game& g, const AppToggles& toggles, const uint8_t* keys, float dt
     }
 
     // Substepping to prevent tunneling at low FPS / high speeds.
-    const float max_step = std::max(0.05f, g.player.radius * 0.5f);
+    const float max_step = std::max(settings.min_substep, g.player.radius * 0.5f);
     float travel = sr::math::length(g.player.vel) * dt;
     int steps = int(std::ceil(travel / max_step));
-    steps = std::clamp(steps, 1, 8);
+    steps = std::clamp(steps, 1, settings.max_substeps);
     float sdt = dt / float(steps);
 
     bool grounded_this_frame = false;
@@ -50,7 +51,7 @@ void step_game(Game& g, const AppToggles& toggles, const uint8_t* keys, float dt
         g.player.pos = g.player.pos + g.player.vel * sdt;
 
         auto c = g.world_col.resolve_sphere(g.player.pos, g.player.radius, &g.player.vel, 3);
-        if (c.hit && c.normal.y > 0.55f)
+        if (c.hit && c.normal.y > settings.ground_normal_y)
             grounded_this_frame = true;
     }
     g.player.grounded = grounded_this_frame;
@@ -58,11 +59,38 @@ void step_game(Game& g, const AppToggles& toggles, const uint8_t* keys, float dt
     // Camera follows the player.
     g.scene.camera = g.player.to_camera(g.fov, g.z_near, g.z_far);
 
-    // Update mario entity transform (translate + yaw + model correction).
+    // Update player entity transform (translate + yaw + model correction).
     sr::math::Mat4 t = sr::math::Mat4::translate(g.player.pos);
     sr::math::Mat4 r = sr::math::Mat4::rotate_y(g.player.yaw);
-    g.scene.entities[g.mario_entity].transform =
-        sr::math::mul(t, sr::math::mul(r, g.mario_model_offset));
+    g.scene.entities[g.player_entity].transform =
+        sr::math::mul(t, sr::math::mul(r, g.player_model_offset));
+
+    // Animation selection (simple):
+    // - airborne -> jump
+    // - moving   -> run
+    // - idle     -> idle
+    float move_mag = std::sqrt(g.player.vel.x * g.player.vel.x + g.player.vel.z * g.player.vel.z);
+    int want = 0;
+    if (!g.player.grounded)
+        want = 2;
+    else if (move_mag > 0.1f)
+        want = 1;
+
+    if (want != g.active_anim) {
+        g.active_anim = want;
+        g.anim_time = 0.0f;
+    } else {
+        g.anim_time += dt;
+    }
+
+    const sr::assets::AnimationClip* clip = &g.anim_idle;
+    if (g.active_anim == 1)
+        clip = &g.anim_run;
+    if (g.active_anim == 2)
+        clip = &g.anim_jump;
+
+    if (g.player_skin)
+        sr::anim::skin_model(*g.player_skin, *clip, g.anim_time);
 }
 
 } // namespace app

@@ -1,13 +1,17 @@
-# Architecture
+#Architecture
 
-## Data Model
+##Data Model
 
-### Assets (loaded once, shareable)
-- `Texture`: immutable pixel data (RGBA8).
-- `Material`: references textures + parameters (base color, flags like double-sided).
-- `Mesh`: vertex/index buffers (single index stream; vertices include position + UV + optional normal).
-- `Model`: a list of `Primitive`:
-  - `Primitive { Mesh*, index_range, Material* }`
+    ## #Assets(loaded once, shareable) - `Texture`: immutable pixel data(RGBA8).- `Material`
+    : references textures
+      +
+      parameters(base color, flags like double - sided).- `Mesh`
+    : vertex
+      /
+      index buffers(single index stream; vertices include position + UV + optional normal).- `Model`
+    : a list of `Primitive`: - `Primitive {
+    Mesh*, index_range, Material*
+}`
 
 ### Instances (placed in world)
 - `Transform`: position/rotation/scale.
@@ -39,4 +43,3 @@
 - Per-object frustum culling via bounding sphere/AABB.
 - Per-triangle culling/backface.
 - Optional tile-based raster later for better cache and parallelism.
-

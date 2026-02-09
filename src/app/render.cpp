@@ -2,15 +2,11 @@
 
 #include "app/util.hpp"
 
-#include "sr/gfx/font5x7.hpp"
 #include "sr/math/mat4.hpp"
 #include "sr/math/transform.hpp"
 #include "sr/render/frustum.hpp"
 
 #include <SDL2/SDL.h>
-
-#include <cstdio>
-#include <cstring>
 
 namespace app {
 
@@ -59,30 +55,16 @@ void render_game(sr::render::Renderer& renderer, sr::gfx::Framebuffer& fb, Game&
         }
     }
 
-    if (fps && toggles.show_fps) {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "FPS: %.1f", double(fps->value));
-        sr::gfx::draw_text_5x7(fb, 8, 8, buf, 0xFFFFFFFFu, 2, 1);
-    }
+    (void)fps;
 }
 
 void present(SDL_Renderer* sdl_renderer, SDL_Texture* screen, const sr::gfx::Framebuffer& fb,
              int window_w, int window_h) {
-    void* pixels = nullptr;
-    int pitch = 0;
-    if (SDL_LockTexture(screen, nullptr, &pixels, &pitch) == 0) {
-        const int row_bytes = fb.width() * int(sizeof(uint32_t));
-        for (int y = 0; y < fb.height(); ++y) {
-            std::memcpy(static_cast<uint8_t*>(pixels) + y * pitch, fb.pixels() + y * fb.width(),
-                        row_bytes);
-        }
-        SDL_UnlockTexture(screen);
-    }
-
-    SDL_RenderClear(sdl_renderer);
-    const SDL_Rect dst = app::centered_letterbox_rect(window_w, window_h, fb.width(), fb.height());
-    SDL_RenderCopy(sdl_renderer, screen, nullptr, &dst);
-    SDL_RenderPresent(sdl_renderer);
+    (void)sdl_renderer;
+    (void)screen;
+    (void)fb;
+    (void)window_w;
+    (void)window_h;
 }
 
 } // namespace app

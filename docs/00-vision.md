@@ -1,4 +1,4 @@
-# Vision
+#Vision
 
 This repo is a from-scratch CPU software renderer in C++.
 
@@ -13,4 +13,3 @@ Non-goals (for now):
 - Full PBR or modern GPU material systems.
 - Complex scene graphs / animation systems.
 - Massive dependency stacks.
-
