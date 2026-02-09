@@ -14,6 +14,8 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
                float dt, int mouse_dx, int mouse_dy) {
     dt = std::min(dt, settings.max_dt);
 
+    const bool was_grounded = g.player.grounded;
+
     if (toggles.mouse_look)
         g.player.apply_mouse(mouse_dx, mouse_dy);
 
@@ -65,9 +67,37 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
     g.scene.entities[g.player_entity].transform =
         sr::math::mul(t, sr::math::mul(r, g.player_model_offset));
 
-    // Animation: lock to a single clip for debugging.
-    g.anim_time += dt;
-    const sr::assets::AnimationClip* clip = &g.anim_run;
+    // Animation selection:
+    // - airborne => jump
+    // - moving   => run
+    // - else     => idle
+    //
+    // Keep anim time continuous within a clip. Reset on clip change.
+    float move_mag = std::sqrt(g.player.vel.x * g.player.vel.x + g.player.vel.z * g.player.vel.z);
+    int want = 0;
+    if (!g.player.grounded) {
+        want = 2;
+    } else if (move_mag > 0.1f) {
+        want = 1;
+    }
+
+    // If we just left the ground (jump start), restart the jump animation so it reads well.
+    const bool just_left_ground = was_grounded && !g.player.grounded;
+    if (just_left_ground && want == 2) {
+        g.active_anim = want;
+        g.anim_time = 0.0f;
+    } else if (want != g.active_anim) {
+        g.active_anim = want;
+        g.anim_time = 0.0f;
+    } else {
+        g.anim_time += dt;
+    }
+
+    const sr::assets::AnimationClip* clip = &g.anim_idle;
+    if (g.active_anim == 1)
+        clip = &g.anim_run;
+    if (g.active_anim == 2)
+        clip = &g.anim_jump;
 
     if (g.player_skin)
         sr::anim::skin_model(*g.player_skin, *clip, g.anim_time);
