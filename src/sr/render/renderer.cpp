@@ -162,17 +162,6 @@ void Renderer::draw_textured_mesh_prepared(const PreparedMesh& prepared,
       sr::math::Vec3 ndc_b{b.clip.x * invwb, b.clip.y * invwb, b.clip.z * invwb};
       sr::math::Vec3 ndc_c{c.clip.x * invwc, c.clip.y * invwc, c.clip.z * invwc};
 
-      // Backface cull in NDC (y up). CCW = front.
-      float area = (ndc_b.x - ndc_a.x) * (ndc_c.y - ndc_a.y) -
-                   (ndc_b.y - ndc_a.y) * (ndc_c.x - ndc_a.x);
-      if (!double_sided) {
-        if (front_face_ccw) {
-          if (area <= 0.0f) continue;
-        } else {
-          if (area >= 0.0f) continue;
-        }
-      }
-
       auto to_screen = [&](const sr::math::Vec3& ndc, float invw, const sr::math::Vec2& uv) -> ScreenVert {
         float sx = (ndc.x * 0.5f + 0.5f) * float(fb_.width() - 1);
         float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * float(fb_.height() - 1);  // y down
@@ -189,6 +178,17 @@ void Renderer::draw_textured_mesh_prepared(const PreparedMesh& prepared,
       ScreenVert sa = to_screen(ndc_a, invwa, a.uv);
       ScreenVert sb = to_screen(ndc_b, invwb, b.uv);
       ScreenVert sc = to_screen(ndc_c, invwc, c.uv);
+
+      // Backface cull in NDC (y up). CCW in NDC is the usual "front-face" convention.
+      float area_ndc = (ndc_b.x - ndc_a.x) * (ndc_c.y - ndc_a.y) -
+                       (ndc_b.y - ndc_a.y) * (ndc_c.x - ndc_a.x);
+      if (!double_sided) {
+        if (front_face_ccw) {
+          if (area_ndc <= 0.0f) continue;
+        } else {
+          if (area_ndc >= 0.0f) continue;
+        }
+      }
 
       raster_triangle_textured(sa, sb, sc, tex);
     }
@@ -221,8 +221,12 @@ void Renderer::raster_triangle_textured(const ScreenVert& a, const ScreenVert& b
       float w1 = edge_fn(c.x, c.y, a.x, a.y, px, py);
       float w2 = edge_fn(a.x, a.y, b.x, b.y, px, py);
 
-      // Inside test for CCW.
-      if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f) continue;
+      // Inside test supports both windings (area sign).
+      if (area > 0.0f) {
+        if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f) continue;
+      } else {
+        if (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f) continue;
+      }
 
       float alpha = w0 * inv_area;
       float beta = w1 * inv_area;

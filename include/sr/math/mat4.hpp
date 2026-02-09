@@ -85,6 +85,8 @@ struct Mat4 {
   // Right-handed look-at (camera looks toward target).
   static Mat4 look_at(const Vec3& eye, const Vec3& target, const Vec3& up) {
     Vec3 f = normalize(target - eye);
+    // Right-handed camera basis (column-vector convention).
+    // s points to camera-right, u points to camera-up.
     Vec3 s = normalize(cross(f, up));
     Vec3 u = cross(s, f);
 
@@ -130,4 +132,3 @@ inline Vec4 mul(const Mat4& a, const Vec4& v) {
 }
 
 }  // namespace sr::math
-

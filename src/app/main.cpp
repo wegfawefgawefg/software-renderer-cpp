@@ -46,7 +46,6 @@ int main(int argc, char** argv) {
       "./assets/models/peaches_castle.obj", store,
       sr::assets::ObjModelLoadOptions{
           .flip_v = true,
-          // Peach's Castle assets often come in with CW winding for "front".
           .front_face_ccw = false,
           .double_sided = false,
       }));
@@ -112,6 +111,7 @@ int main(int argc, char** argv) {
   bool cull_enabled = true;
   bool flip_winding = false;
   bool castle_double_sided = false;
+  bool gravity_enabled = true;
 
   bool running = true;
   uint64_t last = SDL_GetPerformanceCounter();
@@ -141,6 +141,14 @@ int main(int argc, char** argv) {
       if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_t) {
         castle_double_sided = !castle_double_sided;
       }
+      if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_g) {
+        gravity_enabled = !gravity_enabled;
+        if (!gravity_enabled) {
+          // Freeze vertical motion while gravity is disabled.
+          player.vel.y = 0.0f;
+          player.grounded = true;
+        }
+      }
       if (e.type == SDL_MOUSEMOTION && mouse_look) {
         mouse_dx += e.motion.xrel;
         mouse_dy += e.motion.yrel;
@@ -166,7 +174,12 @@ int main(int argc, char** argv) {
     }
 
     // Gravity.
-    player.vel.y -= player.gravity * dt;
+    if (gravity_enabled) {
+      player.vel.y -= player.gravity * dt;
+    } else {
+      player.vel.y = 0.0f;
+      player.grounded = true;
+    }
 
     // Substepping to prevent tunneling at low FPS / high speeds.
     const float max_step = std::max(0.05f, player.radius * 0.5f);
