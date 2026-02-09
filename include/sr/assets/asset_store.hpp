@@ -11,15 +11,14 @@
 namespace sr::assets {
 
 class AssetStore {
- public:
-  explicit AssetStore(SDL_Renderer* renderer) : renderer_(renderer) {}
+  public:
+    explicit AssetStore(SDL_Renderer* renderer) : renderer_(renderer) {}
 
-  std::shared_ptr<sr::gfx::Texture> get_texture(const std::string& path);
+    std::shared_ptr<sr::gfx::Texture> get_texture(const std::string& path);
 
- private:
-  SDL_Renderer* renderer_ = nullptr;
-  std::unordered_map<std::string, std::weak_ptr<sr::gfx::Texture>> textures_;
+  private:
+    SDL_Renderer* renderer_ = nullptr;
+    std::unordered_map<std::string, std::weak_ptr<sr::gfx::Texture>> textures_;
 };
 
-}  // namespace sr::assets
-
+} // namespace sr::assets

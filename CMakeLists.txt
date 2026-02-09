@@ -22,6 +22,7 @@ add_library(sr
     src/sr/assets/asset_store.cpp
     src/sr/assets/mtl_loader.cpp
     src/sr/assets/obj_model_loader.cpp
+    src/sr/assets/gltf_model_loader.cpp
     src/sr/render/renderer.cpp
     src/sr/scene/fly_camera.cpp
     src/sr/scene/player_controller.cpp
@@ -29,6 +30,7 @@ add_library(sr
 )
 target_include_directories(sr PUBLIC
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/third_party/cgltf
     ${SDL2_INCLUDE_DIRS}
     ${SDL2_IMAGE_INCLUDE_DIRS}
     ${SDL2_TTF_INCLUDE_DIRS}

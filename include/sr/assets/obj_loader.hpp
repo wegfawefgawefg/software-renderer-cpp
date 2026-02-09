@@ -8,5 +8,4 @@ namespace sr::assets {
 
 Mesh load_obj_minimal(const std::string& path, bool flip_v = true);
 
-}  // namespace sr::assets
-
+} // namespace sr::assets

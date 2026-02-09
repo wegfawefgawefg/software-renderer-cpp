@@ -9,10 +9,9 @@
 namespace sr::assets {
 
 struct Mesh {
-  std::vector<sr::math::Vec3> positions;
-  std::vector<sr::math::Vec2> uvs;  // optional; empty = none
-  std::vector<uint32_t> indices;    // triangle list, 3*n
+    std::vector<sr::math::Vec3> positions;
+    std::vector<sr::math::Vec2> uvs; // optional; empty = none
+    std::vector<uint32_t> indices;   // triangle list, 3*n
 };
 
-}  // namespace sr::assets
-
+} // namespace sr::assets

@@ -7,21 +7,23 @@ namespace sr::gfx {
 
 // Immutable ARGB8888 texture in CPU memory (matches framebuffer format).
 class Texture {
- public:
-  Texture() = default;
-  Texture(int w, int h, std::vector<uint32_t> rgba)
-      : width_(w), height_(h), pixels_(std::move(rgba)) {}
+  public:
+    Texture() = default;
+    Texture(int w, int h, std::vector<uint32_t> argb, bool has_alpha)
+        : width_(w), height_(h), pixels_(std::move(argb)), has_alpha_(has_alpha) {}
 
-  int width() const { return width_; }
-  int height() const { return height_; }
-  const uint32_t* pixels() const { return pixels_.data(); }
+    int width() const { return width_; }
+    int height() const { return height_; }
+    const uint32_t* pixels() const { return pixels_.data(); }
+    bool has_alpha() const { return has_alpha_; }
 
-  uint32_t sample_repeat(float u, float v) const;
+    uint32_t sample_repeat(float u, float v) const;
 
- private:
-  int width_ = 0;
-  int height_ = 0;
-  std::vector<uint32_t> pixels_;  // ARGB8888 (SDL_PIXELFORMAT_ARGB8888)
+  private:
+    int width_ = 0;
+    int height_ = 0;
+    std::vector<uint32_t> pixels_; // ARGB8888 (SDL_PIXELFORMAT_ARGB8888)
+    bool has_alpha_ = false;
 };
 
-}  // namespace sr::gfx
+} // namespace sr::gfx

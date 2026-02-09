@@ -12,13 +12,12 @@ class Texture;
 namespace sr::assets {
 
 struct Material {
-  std::string name;
-  sr::math::Vec3 base_color{1.0f, 1.0f, 1.0f};
-  std::shared_ptr<sr::gfx::Texture> base_color_tex;  // may be null
+    std::string name;
+    sr::math::Vec3 base_color{1.0f, 1.0f, 1.0f};
+    std::shared_ptr<sr::gfx::Texture> base_color_tex; // may be null
 
-  bool double_sided = false;
-  bool front_face_ccw = true;
+    bool double_sided = false;
+    bool front_face_ccw = true;
 };
 
-}  // namespace sr::assets
-
+} // namespace sr::assets

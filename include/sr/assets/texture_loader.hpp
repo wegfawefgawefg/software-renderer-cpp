@@ -10,5 +10,4 @@ namespace sr::assets {
 
 sr::gfx::Texture load_texture_rgba8888(SDL_Renderer* renderer, const std::string& path);
 
-}  // namespace sr::assets
-
+} // namespace sr::assets

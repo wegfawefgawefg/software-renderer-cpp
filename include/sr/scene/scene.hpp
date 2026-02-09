@@ -10,14 +10,13 @@
 namespace sr::scene {
 
 struct Entity {
-  std::shared_ptr<sr::assets::Model> model;
-  sr::math::Mat4 transform = sr::math::Mat4::identity();
+    std::shared_ptr<sr::assets::Model> model;
+    sr::math::Mat4 transform = sr::math::Mat4::identity();
 };
 
 struct Scene {
-  sr::render::Camera camera;
-  std::vector<Entity> entities;
+    sr::render::Camera camera;
+    std::vector<Entity> entities;
 };
 
-}  // namespace sr::scene
-
+} // namespace sr::scene
