@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sr/assets/material.hpp"
 #include "sr/assets/mesh.hpp"
 #include "sr/gfx/depthbuffer.hpp"
 #include "sr/gfx/framebuffer.hpp"
@@ -46,14 +47,19 @@ class Renderer {
     PreparedMesh prepare_mesh(const sr::assets::Mesh& mesh, const sr::math::Mat4& model,
                               const Camera& cam) const;
 
-    void draw_textured_mesh_prepared(const PreparedMesh& prepared, const sr::gfx::Texture& tex,
-                                     uint32_t index_offset = 0, uint32_t index_count = 0,
-                                     bool double_sided = false, bool front_face_ccw = true);
+    void
+    draw_textured_mesh_prepared(const PreparedMesh& prepared, const sr::gfx::Texture& tex,
+                                uint32_t index_offset = 0, uint32_t index_count = 0,
+                                bool double_sided = false, bool front_face_ccw = true,
+                                sr::assets::AlphaMode alpha_mode = sr::assets::AlphaMode::Opaque,
+                                float alpha_cutoff = 0.5f);
 
     void draw_textured_mesh(const sr::assets::Mesh& mesh, const sr::gfx::Texture& tex,
                             const sr::math::Mat4& model, const Camera& cam,
                             uint32_t index_offset = 0, uint32_t index_count = 0,
-                            bool double_sided = false, bool front_face_ccw = true);
+                            bool double_sided = false, bool front_face_ccw = true,
+                            sr::assets::AlphaMode alpha_mode = sr::assets::AlphaMode::Opaque,
+                            float alpha_cutoff = 0.5f);
 
   private:
     struct ScreenVert {
@@ -66,7 +72,8 @@ class Renderer {
     };
 
     void raster_triangle_textured(const ScreenVert& a, const ScreenVert& b, const ScreenVert& c,
-                                  const sr::gfx::Texture& tex);
+                                  const sr::gfx::Texture& tex, sr::assets::AlphaMode alpha_mode,
+                                  float alpha_cutoff);
 
     static std::vector<detail::ClipVert> clip_triangle(std::vector<detail::ClipVert> poly);
 

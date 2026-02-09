@@ -56,5 +56,10 @@ target_compile_options(sr PRIVATE
 
 add_executable(renderer
     src/app/main.cpp
+    src/app/cli.cpp
+    src/app/game.cpp
+    src/app/input.cpp
+    src/app/sim.cpp
+    src/app/render.cpp
 )
 target_link_libraries(renderer PRIVATE sr)

@@ -35,6 +35,17 @@ static sr::math::Vec3 read_vec3(const cgltf_accessor* acc, cgltf_size i) {
     return sr::math::Vec3{v[0], v[1], v[2]};
 }
 
+static sr::math::Vec3 transform_point_col_major_4x4(const float m[16], const sr::math::Vec3& p) {
+    // glTF matrices are column-major.
+    const float x = p.x;
+    const float y = p.y;
+    const float z = p.z;
+    const float rx = m[0] * x + m[4] * y + m[8] * z + m[12];
+    const float ry = m[1] * x + m[5] * y + m[9] * z + m[13];
+    const float rz = m[2] * x + m[6] * y + m[10] * z + m[14];
+    return sr::math::Vec3{rx, ry, rz};
+}
+
 } // namespace
 
 Model load_gltf_model(const std::filesystem::path& path, AssetStore& store,
@@ -75,6 +86,19 @@ Model load_gltf_model(const std::filesystem::path& path, AssetStore& store,
             out.name = m.name ? m.name : ("mat_" + std::to_string(mi));
             out.front_face_ccw = opt.front_face_ccw;
             out.double_sided = opt.double_sided || (m.double_sided != 0);
+            out.alpha_cutoff = (m.alpha_cutoff > 0.0f) ? float(m.alpha_cutoff) : 0.5f;
+            switch (m.alpha_mode) {
+            case cgltf_alpha_mode_mask:
+                out.alpha_mode = AlphaMode::Mask;
+                break;
+            case cgltf_alpha_mode_blend:
+                out.alpha_mode = AlphaMode::Blend;
+                break;
+            case cgltf_alpha_mode_opaque:
+            default:
+                out.alpha_mode = AlphaMode::Opaque;
+                break;
+            }
 
             // Base color texture.
             if (m.has_pbr_metallic_roughness) {
@@ -100,7 +124,10 @@ Model load_gltf_model(const std::filesystem::path& path, AssetStore& store,
     Model model;
     model.materials = std::move(materials);
 
-    auto add_primitive = [&](const cgltf_primitive& prim) {
+    auto add_primitive = [&](const cgltf_primitive& prim, const float node_world[16]) {
+        if (prim.type != cgltf_primitive_type_triangles)
+            return;
+
         const cgltf_accessor* acc_pos = nullptr;
         const cgltf_accessor* acc_uv = nullptr;
 
@@ -132,7 +159,7 @@ Model load_gltf_model(const std::filesystem::path& path, AssetStore& store,
         for (cgltf_size ii = 0; ii < index_count; ++ii) {
             cgltf_size vi = prim.indices ? cgltf_accessor_read_index(prim.indices, ii) : ii;
 
-            sr::math::Vec3 p = read_vec3(acc_pos, vi);
+            sr::math::Vec3 p = transform_point_col_major_4x4(node_world, read_vec3(acc_pos, vi));
             sr::math::Vec2 uv{0.0f, 0.0f};
             if (acc_uv)
                 uv = read_vec2(acc_uv, vi);
@@ -151,23 +178,38 @@ Model load_gltf_model(const std::filesystem::path& path, AssetStore& store,
             model.primitives.push_back(out_prim);
     };
 
+    auto visit_node = [&](auto&& self, const cgltf_node* node) -> void {
+        if (!node)
+            return;
+
+        float world[16];
+        cgltf_node_transform_world(node, world);
+
+        if (node->mesh) {
+            const cgltf_mesh& mesh = *node->mesh;
+            for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi) {
+                add_primitive(mesh.primitives[pi], world);
+            }
+        }
+
+        for (cgltf_size ci = 0; ci < node->children_count; ++ci) {
+            self(self, node->children[ci]);
+        }
+    };
+
     // Use default scene if present, else walk all meshes.
     if (data->scene) {
         const cgltf_scene& sc = *data->scene;
         for (cgltf_size ni = 0; ni < sc.nodes_count; ++ni) {
-            const cgltf_node* node = sc.nodes[ni];
-            if (!node || !node->mesh)
-                continue;
-            const cgltf_mesh& mesh = *node->mesh;
-            for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi) {
-                add_primitive(mesh.primitives[pi]);
-            }
+            visit_node(visit_node, sc.nodes[ni]);
         }
     } else {
+        // No scene graph; treat meshes as identity-transformed.
+        float ident[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
         for (cgltf_size mi = 0; mi < data->meshes_count; ++mi) {
             const cgltf_mesh& mesh = data->meshes[mi];
             for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi) {
-                add_primitive(mesh.primitives[pi]);
+                add_primitive(mesh.primitives[pi], ident);
             }
         }
     }

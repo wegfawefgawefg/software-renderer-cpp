@@ -99,10 +99,11 @@ std::vector<detail::ClipVert> Renderer::clip_triangle(std::vector<detail::ClipVe
 void Renderer::draw_textured_mesh(const sr::assets::Mesh& mesh, const sr::gfx::Texture& tex,
                                   const sr::math::Mat4& model, const Camera& cam,
                                   uint32_t index_offset, uint32_t index_count, bool double_sided,
-                                  bool front_face_ccw) {
+                                  bool front_face_ccw, sr::assets::AlphaMode alpha_mode,
+                                  float alpha_cutoff) {
     auto prepared = prepare_mesh(mesh, model, cam);
     draw_textured_mesh_prepared(prepared, tex, index_offset, index_count, double_sided,
-                                front_face_ccw);
+                                front_face_ccw, alpha_mode, alpha_cutoff);
 }
 
 Renderer::PreparedMesh Renderer::prepare_mesh(const sr::assets::Mesh& mesh,
@@ -129,7 +130,8 @@ Renderer::PreparedMesh Renderer::prepare_mesh(const sr::assets::Mesh& mesh,
 void Renderer::draw_textured_mesh_prepared(const PreparedMesh& prepared,
                                            const sr::gfx::Texture& tex, uint32_t index_offset,
                                            uint32_t index_count, bool double_sided,
-                                           bool front_face_ccw) {
+                                           bool front_face_ccw, sr::assets::AlphaMode alpha_mode,
+                                           float alpha_cutoff) {
     if (!prepared.mesh)
         return;
     const sr::assets::Mesh& mesh = *prepared.mesh;
@@ -207,13 +209,14 @@ void Renderer::draw_textured_mesh_prepared(const PreparedMesh& prepared,
                 }
             }
 
-            raster_triangle_textured(sa, sb, sc, tex);
+            raster_triangle_textured(sa, sb, sc, tex, alpha_mode, alpha_cutoff);
         }
     }
 }
 
 void Renderer::raster_triangle_textured(const ScreenVert& a, const ScreenVert& b,
-                                        const ScreenVert& c, const sr::gfx::Texture& tex) {
+                                        const ScreenVert& c, const sr::gfx::Texture& tex,
+                                        sr::assets::AlphaMode alpha_mode, float alpha_cutoff) {
     // Bounding box.
     float minx_f = std::min({a.x, b.x, c.x});
     float maxx_f = std::max({a.x, b.x, c.x});
@@ -266,17 +269,42 @@ void Renderer::raster_triangle_textured(const ScreenVert& a, const ScreenVert& b
             float u = uow / invw;
             float v = vow / invw;
 
-            uint32_t argb = tex.sample_repeat(u, v);
-            if (tex.has_alpha()) {
-                const uint8_t src_a = uint8_t((argb >> 24) & 0xFF);
-                // Alpha cutout for now: treat alpha as a mask (good for fences/windows).
-                // Proper translucent blending needs a separate pass + sorting or OIT.
-                if (src_a < 128)
-                    continue;
-                argb |= 0xFF000000u;
+            uint32_t src = tex.sample_repeat(u, v);
+            uint8_t a8 = uint8_t((src >> 24) & 0xFF);
+
+            if (alpha_mode == sr::assets::AlphaMode::Opaque) {
+                src |= 0xFF000000u;
+                fb_.pixels()[y * fb_.width() + x] = src;
+                zb_.set(x, y, z);
+                continue;
             }
 
-            fb_.pixels()[y * fb_.width() + x] = argb;
+            if (alpha_mode == sr::assets::AlphaMode::Mask) {
+                const float cutoff = std::clamp(alpha_cutoff, 0.0f, 1.0f);
+                const uint8_t cut = uint8_t(std::lround(cutoff * 255.0f));
+                if (a8 < cut)
+                    continue;
+                src |= 0xFF000000u;
+                fb_.pixels()[y * fb_.width() + x] = src;
+                zb_.set(x, y, z);
+                continue;
+            }
+
+            // Blend (naive): depth-test as usual, then alpha-blend over the existing pixel.
+            if (a8 == 0)
+                continue;
+            uint32_t dst = fb_.pixels()[y * fb_.width() + x];
+            const uint32_t inva = 255u - uint32_t(a8);
+            const uint32_t sr = (src >> 16) & 0xFFu;
+            const uint32_t sg = (src >> 8) & 0xFFu;
+            const uint32_t sb = (src)&0xFFu;
+            const uint32_t dr = (dst >> 16) & 0xFFu;
+            const uint32_t dg = (dst >> 8) & 0xFFu;
+            const uint32_t db = (dst)&0xFFu;
+            const uint32_t or_ = (sr * uint32_t(a8) + dr * inva) / 255u;
+            const uint32_t og_ = (sg * uint32_t(a8) + dg * inva) / 255u;
+            const uint32_t ob_ = (sb * uint32_t(a8) + db * inva) / 255u;
+            fb_.pixels()[y * fb_.width() + x] = 0xFF000000u | (or_ << 16) | (og_ << 8) | ob_;
             zb_.set(x, y, z);
         }
     }
