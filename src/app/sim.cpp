@@ -1,5 +1,7 @@
 #include "app/sim.hpp"
 
+#include "app/camera.hpp"
+
 #include "sr/anim/skinning.hpp"
 #include "sr/math/mat4.hpp"
 
@@ -59,7 +61,9 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
     g.player.grounded = grounded_this_frame;
 
     // Camera follows the player.
-    g.scene.camera = g.player.to_camera(g.fov, g.z_near, g.z_far);
+    const bool status_held = keys[SDL_SCANCODE_TAB] != 0;
+    g.scene.camera = app::update_camera(g.player, g.status_cam_alpha, settings, g.fov, g.z_near,
+                                        g.z_far, status_held, dt);
 
     // Update player entity transform (translate + yaw + model correction).
     sr::math::Mat4 t = sr::math::Mat4::translate(g.player.pos);

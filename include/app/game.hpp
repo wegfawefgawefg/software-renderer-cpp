@@ -35,6 +35,9 @@ struct Game {
     float z_near = 0.1f;
     float z_far = 5000.0f;
 
+    // Camera mode (hold Tab for status camera).
+    float status_cam_alpha = 0.0f; // 0=normal, 1=status
+
     // Entity slots.
     int castle_entity = 0;
     int player_entity = 1;

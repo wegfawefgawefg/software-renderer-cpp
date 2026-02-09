@@ -60,6 +60,7 @@ target_compile_options(sr PRIVATE
 
 add_executable(renderer
     src/app/main.cpp
+    src/app/camera.cpp
     src/app/cli.cpp
     src/app/game.cpp
     src/app/hud.cpp
