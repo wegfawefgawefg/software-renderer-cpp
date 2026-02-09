@@ -6,6 +6,8 @@
 #include "sr/assets/gltf_model_loader.hpp"
 #include "sr/assets/obj_model_loader.hpp"
 
+#include "sr/math/transform.hpp"
+
 #include <algorithm>
 
 namespace app {
@@ -86,25 +88,47 @@ Game init_game(sr::assets::AssetStore& store, const Settings& settings) {
                                      .two_sided = false,
                                  });
 
-    // Player model correction: scale to 1.0 unit tall and pivot at bottom-center.
+    // Player model correction:
+    // - Kenney FBX characters are authored Z-up; rotate to our Y-up world.
+    // - Scale to `settings.mario_height_units` tall (1.0 = "1 meter")
+    // - Pivot at bottom-center.
     const auto& player_mesh = g.player_skin->model->mesh;
+    sr::math::Mat4 rot_fix = sr::math::Mat4::rotate_x(-3.14159265f * 0.5f);
+
     sr::math::Vec3 p_mn, p_mx;
-    app::compute_bounds(player_mesh.positions, p_mn, p_mx);
+    if (!player_mesh.positions.empty()) {
+        sr::math::Vec3 mn = sr::math::transform_point(rot_fix, player_mesh.positions[0]);
+        sr::math::Vec3 mx = mn;
+        for (const auto& p : player_mesh.positions) {
+            sr::math::Vec3 pr = sr::math::transform_point(rot_fix, p);
+            mn.x = std::min(mn.x, pr.x);
+            mn.y = std::min(mn.y, pr.y);
+            mn.z = std::min(mn.z, pr.z);
+            mx.x = std::max(mx.x, pr.x);
+            mx.y = std::max(mx.y, pr.y);
+            mx.z = std::max(mx.z, pr.z);
+        }
+        p_mn = mn;
+        p_mx = mx;
+    } else {
+        p_mn = sr::math::Vec3{0.0f, 0.0f, 0.0f};
+        p_mx = sr::math::Vec3{1.0f, 1.0f, 1.0f};
+    }
+
     float p_h = std::max(1e-6f, p_mx.y - p_mn.y);
     float p_scale = settings.mario_height_units / p_h;
-    sr::math::Vec3 p_pivot{
+    sr::math::Vec3 pivot_rot{
         (p_mn.x + p_mx.x) * 0.5f,
         p_mn.y,
         (p_mn.z + p_mx.z) * 0.5f,
     };
-    sr::math::Vec3 p_pivot_t{
-        -p_pivot.x * p_scale,
-        -p_pivot.y * p_scale,
-        -p_pivot.z * p_scale,
-    };
+    sr::math::Vec3 pivot_t{-pivot_rot.x * p_scale, -pivot_rot.y * p_scale, -pivot_rot.z * p_scale};
+
+    // Apply rotation first, then scale, then translate the scaled pivot to origin: T * S * R.
     g.player_model_offset =
-        sr::math::mul(sr::math::Mat4::translate(p_pivot_t),
-                      sr::math::Mat4::scale(sr::math::Vec3{p_scale, p_scale, p_scale}));
+        sr::math::mul(sr::math::Mat4::translate(pivot_t),
+                      sr::math::mul(sr::math::Mat4::scale(sr::math::Vec3{p_scale, p_scale, p_scale}),
+                                    rot_fix));
 
     // Player.
     g.player.radius = settings.player_radius;

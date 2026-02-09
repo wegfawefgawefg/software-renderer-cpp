@@ -85,10 +85,16 @@ struct Mat4 {
     // Right-handed look-at (camera looks toward target).
     static Mat4 look_at(const Vec3& eye, const Vec3& target, const Vec3& up) {
         Vec3 f = normalize(target - eye);
-        // Right-handed camera basis (column-vector convention).
-        // s points to camera-right, u points to camera-up.
-        Vec3 s = normalize(cross(f, up));
-        Vec3 u = cross(s, f);
+        // Standard right-handed OpenGL-style view matrix (camera forward is -Z in view space).
+        // This matches the common formulation:
+        //   s = normalize(f x up)
+        //   u = s x f
+        // with the third row using -f.
+        //
+        // NOTE: If your controls feel inverted, fix the controller math (strafe basis / yaw sign),
+        // not the view matrix (changing handedness here will mirror the whole world and flip winding).
+        Vec3 s = normalize(cross(f, up)); // camera-right in the view transform
+        Vec3 u = cross(s, f);             // camera-up
 
         Mat4 r = identity();
         r.m[0][0] = s.x;

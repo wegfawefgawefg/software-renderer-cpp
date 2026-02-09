@@ -65,29 +65,9 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
     g.scene.entities[g.player_entity].transform =
         sr::math::mul(t, sr::math::mul(r, g.player_model_offset));
 
-    // Animation selection (simple):
-    // - airborne -> jump
-    // - moving   -> run
-    // - idle     -> idle
-    float move_mag = std::sqrt(g.player.vel.x * g.player.vel.x + g.player.vel.z * g.player.vel.z);
-    int want = 0;
-    if (!g.player.grounded)
-        want = 2;
-    else if (move_mag > 0.1f)
-        want = 1;
-
-    if (want != g.active_anim) {
-        g.active_anim = want;
-        g.anim_time = 0.0f;
-    } else {
-        g.anim_time += dt;
-    }
-
-    const sr::assets::AnimationClip* clip = &g.anim_idle;
-    if (g.active_anim == 1)
-        clip = &g.anim_run;
-    if (g.active_anim == 2)
-        clip = &g.anim_jump;
+    // Animation: lock to a single clip for debugging.
+    g.anim_time += dt;
+    const sr::assets::AnimationClip* clip = &g.anim_run;
 
     if (g.player_skin)
         sr::anim::skin_model(*g.player_skin, *clip, g.anim_time);

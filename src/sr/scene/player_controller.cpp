@@ -8,8 +8,9 @@
 namespace sr::scene {
 
 void PlayerController::apply_mouse(int dx, int dy) {
-    // +dx should turn right (positive yaw turns forward vector toward +X).
-    yaw += float(dx) * mouse_sens;
+    // SDL relative mouse: +dx means mouse moved right.
+    // With our current camera/view conventions, this should turn the camera to the right.
+    yaw += float(-dx) * mouse_sens;
     pitch += float(-dy) * mouse_sens;
     pitch = std::clamp(pitch, -1.0f, 0.8f);
 }
@@ -20,7 +21,7 @@ sr::math::Vec3 PlayerController::move_dir_from_keys(const uint8_t* keys) const {
     float sy = std::sin(yaw);
     sr::math::Vec3 forward{sy, 0.0f, cy};
     sr::math::Vec3 world_up{0.0f, 1.0f, 0.0f};
-    sr::math::Vec3 right = sr::math::normalize(sr::math::cross(world_up, forward));
+    sr::math::Vec3 right = sr::math::normalize(sr::math::cross(forward, world_up));
 
     sr::math::Vec3 move{0.0f, 0.0f, 0.0f};
     if (keys[SDL_SCANCODE_W])

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -19,6 +20,27 @@
 
 namespace sr::assets {
 namespace {
+
+static std::string normalize_joint_name(std::string s) {
+    // FBX exporters often namespace joint names: "Armature|Hips", "mixamorig:Hips", etc.
+    // For our simple loaders we match by the "leaf" name.
+    auto cut_after_last = [&](char c) {
+        size_t p = s.find_last_of(c);
+        if (p != std::string::npos && p + 1 < s.size())
+            s = s.substr(p + 1);
+    };
+    cut_after_last('|');
+    cut_after_last(':');
+    // Trim whitespace.
+    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n'))
+        s.pop_back();
+    size_t i = 0;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n'))
+        i++;
+    if (i > 0)
+        s = s.substr(i);
+    return s;
+}
 
 static sr::math::Mat4 mat4_from_ufbx(const ufbx_matrix& m) {
     // ufbx_matrix is a 4x3 affine matrix represented as column vectors.
@@ -58,7 +80,15 @@ static std::filesystem::path resolve_texture(const std::filesystem::path& base_d
     std::filesystem::path p = rel;
     if (p.is_absolute())
         return p;
-    return base_dir / p;
+    // Try as-is first (project-relative paths like "./assets/..." are common).
+    if (std::filesystem::exists(p))
+        return p;
+    // Then try relative to the FBX file directory.
+    std::filesystem::path bp = base_dir / p;
+    if (std::filesystem::exists(bp))
+        return bp;
+    // Best-effort.
+    return bp;
 }
 
 static std::string to_string(ufbx_string s) {
@@ -209,7 +239,7 @@ SkinnedModel load_fbx_skinned_model(const std::filesystem::path& path, AssetStor
     for (size_t i = 0; i < ordered.size(); ++i) {
         const ufbx_node* n = ordered[i];
         auto& j = out.skeleton.joints[i];
-        j.name = to_string(n->name);
+        j.name = normalize_joint_name(to_string(n->name));
         j.rest_local = trs_from_ufbx(n->local_transform);
         j.inv_bind = sr::math::Mat4::identity();
 
@@ -237,34 +267,39 @@ SkinnedModel load_fbx_skinned_model(const std::filesystem::path& path, AssetStor
     }
 
     // Materials.
-    // For now: 1 material per FBX mesh material; if none, single default.
-    if (mesh_node->materials.count == 0) {
+    // Prefer per-instance materials from the mesh node, otherwise fall back to mesh materials.
+    const ufbx_material_list* mats = &mesh_node->materials;
+    if (mats->count == 0)
+        mats = &mesh->materials;
+
+    // Resolve diffuse/base texture once (we can expand this later).
+    std::filesystem::path tex_path;
+    if (!opt.override_diffuse_texture.empty()) {
+        tex_path = resolve_texture(base_dir, opt.override_diffuse_texture);
+    } else if (scene->texture_files.count > 0) {
+        const ufbx_texture_file tf = scene->texture_files.data[0];
+        std::string rel(tf.filename.data, tf.filename.length);
+        tex_path = resolve_texture(base_dir, rel);
+    }
+    std::shared_ptr<sr::gfx::Texture> resolved_tex;
+    if (!tex_path.empty() && std::filesystem::exists(tex_path))
+        resolved_tex = store.get_texture(tex_path.string());
+
+    if (mats->count == 0) {
         Material m;
         m.name = "default";
         m.front_face_ccw = opt.front_face_ccw;
         m.double_sided = opt.double_sided;
+        m.base_color_tex = resolved_tex;
         out.model->materials.push_back(std::move(m));
     } else {
-        for (size_t i = 0; i < mesh_node->materials.count; ++i) {
+        for (size_t i = 0; i < mats->count; ++i) {
             Material m;
-            const ufbx_material* mat = mesh_node->materials.data[i];
+            const ufbx_material* mat = mats->data[i];
             m.name = mat ? to_string(mat->name) : ("mat_" + std::to_string(i));
             m.front_face_ccw = opt.front_face_ccw;
             m.double_sided = opt.double_sided;
-
-            // Resolve diffuse/base texture.
-            std::filesystem::path tex_path;
-            if (!opt.override_diffuse_texture.empty()) {
-                tex_path = resolve_texture(base_dir, opt.override_diffuse_texture);
-            } else if (scene->texture_files.count > 0) {
-                // Best-effort: use first texture file referenced by the scene.
-                const ufbx_texture_file tf = scene->texture_files.data[0];
-                std::string rel(tf.filename.data, tf.filename.length);
-                tex_path = resolve_texture(base_dir, rel);
-            }
-            if (!tex_path.empty() && std::filesystem::exists(tex_path))
-                m.base_color_tex = store.get_texture(tex_path.string());
-
+            m.base_color_tex = resolved_tex;
             out.model->materials.push_back(std::move(m));
         }
     }
@@ -301,10 +336,15 @@ SkinnedModel load_fbx_skinned_model(const std::filesystem::path& path, AssetStor
         if (opt.flip_v)
             uv.y = 1.0f - uv.y;
 
-        // Skin influences use vertex id from position attribute if possible.
+        // Skin influences are indexed by logical mesh vertex (not by split attribute index).
+        // Use `mesh->vertex_indices[idx]` to map from index -> logical vertex.
         uint32_t vertex_id = 0;
-        if (mesh->vertex_position.exists && idx < mesh->vertex_position.indices.count)
+        if (idx < mesh->vertex_indices.count) {
+            vertex_id = mesh->vertex_indices.data[idx];
+        } else if (mesh->vertex_position.exists && idx < mesh->vertex_position.indices.count) {
+            // Fallback: best-effort (works if positions are unique-per-vertex).
             vertex_id = mesh->vertex_position.indices.data[idx];
+        }
         SkinInfluence4 inf = influences_from_vertex(*skin, vertex_id);
         for (int k = 0; k < 4; ++k) {
             uint16_t cl = inf.joint[k];
@@ -352,7 +392,12 @@ SkinnedModel load_fbx_skinned_model(const std::filesystem::path& path, AssetStor
         for (size_t pi = 0; pi < mesh->material_parts.count; ++pi) {
             const ufbx_mesh_part part = mesh->material_parts.data[pi];
             Primitive prim;
-            prim.material_index = uint32_t(std::min<size_t>(pi, out.model->materials.size() - 1));
+            uint32_t mi = part.index;
+            if (!out.model->materials.empty())
+                mi = std::min<uint32_t>(mi, uint32_t(out.model->materials.size() - 1));
+            else
+                mi = 0;
+            prim.material_index = mi;
             prim.index_offset = uint32_t(out.model->mesh.indices.size());
 
             for (size_t i = 0; i < part.face_indices.count; ++i) {
@@ -385,6 +430,30 @@ SkinnedModel load_fbx_skinned_model(const std::filesystem::path& path, AssetStor
     // Safety: ensure deformed positions vector exists and matches bind count.
     out.model->mesh.positions = out.bind_positions;
 
+    // Quick sanity check: if almost all vertices are influenced only by joint 0, skinning will
+    // look "nearly static". This usually means the index->vertex mapping was wrong.
+    {
+        size_t multi = 0;
+        size_t non0 = 0;
+        for (const auto& inf : out.skin) {
+            int nonzero_w = 0;
+            for (int k = 0; k < 4; ++k) {
+                if (inf.weight[k] > 0.0001f)
+                    nonzero_w++;
+                if (inf.weight[k] > 0.0001f && inf.joint[k] != 0)
+                    non0++;
+            }
+            if (nonzero_w > 1)
+                multi++;
+        }
+        if (!out.skin.empty() && non0 < out.skin.size() / 50) {
+            std::fprintf(stderr,
+                         "[fbx] warning: skin influences look suspicious (non0=%zu of %zu, "
+                         "multi=%zu)\n",
+                         non0, out.skin.size(), multi);
+        }
+    }
+
     ufbx_free_scene(scene);
     return out;
 }
@@ -404,23 +473,70 @@ AnimationClip load_fbx_animation_clip(const std::filesystem::path& path, const S
     }
 
     const ufbx_anim* anim = scene->anim;
-    if (!anim) {
-        ufbx_free_scene(scene);
-        throw std::runtime_error("FBX has no default anim: " + path.string());
-    }
+    double t0 = 0.0;
+    double t1 = 0.0;
 
-    double t0 = anim->time_begin;
-    double t1 = anim->time_end;
-    if (t1 <= t0) {
-        // Some files only populate anim stack times.
-        if (scene->anim_stacks.count > 0) {
-            const ufbx_anim_stack* st = scene->anim_stacks.data[0];
-            if (st && st->time_end > st->time_begin) {
-                t0 = st->time_begin;
-                t1 = st->time_end;
-                anim = st->anim ? st->anim : anim;
+    // Pick the longest anim stack if available (Kenney's FBXs tend to store clips there).
+    double best_dur = 0.0;
+    if (scene->anim_stacks.count > 0) {
+        for (size_t i = 0; i < scene->anim_stacks.count; ++i) {
+            const ufbx_anim_stack* st = scene->anim_stacks.data[i];
+            if (!st)
+                continue;
+            double a = st->time_begin;
+            double b = st->time_end;
+            double d = b - a;
+            if (d > best_dur) {
+                best_dur = d;
+                t0 = a;
+                t1 = b;
+                if (st->anim)
+                    anim = st->anim;
             }
         }
+    }
+
+    if (anim) {
+        // Fall back to default anim range if stack range absent.
+        if (t1 <= t0) {
+            t0 = anim->time_begin;
+            t1 = anim->time_end;
+        }
+    }
+
+    // Last-resort: derive time range from animation curves (some files leave stack/default ranges 0).
+    if (t1 <= t0 && scene->anim_curves.count > 0) {
+        double mn = 0.0;
+        double mx = 0.0;
+        bool any = false;
+        for (size_t i = 0; i < scene->anim_curves.count; ++i) {
+            const ufbx_anim_curve* c = scene->anim_curves.data[i];
+            if (!c || c->keyframes.count == 0)
+                continue;
+            if (!any) {
+                mn = c->min_time;
+                mx = c->max_time;
+                any = true;
+            } else {
+                mn = std::min(mn, c->min_time);
+                mx = std::max(mx, c->max_time);
+            }
+        }
+        if (any) {
+            t0 = mn;
+            t1 = mx;
+        }
+    }
+
+    if (t1 <= t0) {
+        // If still unknown, pick something reasonable so we can at least sample at t=0..1.
+        t0 = 0.0;
+        t1 = 1.0;
+    }
+
+    if (!anim) {
+        ufbx_free_scene(scene);
+        throw std::runtime_error("FBX has no anim data: " + path.string());
     }
 
     AnimationClip clip;
@@ -438,7 +554,20 @@ AnimationClip load_fbx_animation_clip(const std::filesystem::path& path, const S
         const ufbx_node* n = scene->nodes.data[i];
         if (!n)
             continue;
-        node_by_name.emplace(to_string(n->name), n);
+        node_by_name.emplace(normalize_joint_name(to_string(n->name)), n);
+    }
+
+    // Debug signal if name matching is failing (T-pose).
+    size_t matched = 0;
+    for (const auto& j : skel.joints) {
+        if (node_by_name.find(j.name) != node_by_name.end())
+            matched++;
+    }
+    if (matched < std::min<size_t>(skel.joints.size(), 8)) {
+        std::fprintf(stderr,
+                     "[fbx] clip '%s' weak joint-name match: %zu/%zu (t0=%.3f t1=%.3f) file=%s\n",
+                     clip_name.c_str(), matched, skel.joints.size(), t0, t1,
+                     path.string().c_str());
     }
 
     // Bake samples uniformly.
