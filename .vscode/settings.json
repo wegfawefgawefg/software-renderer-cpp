@@ -1,0 +1,23 @@
+{
+    "files.associations": {
+        "primitives.h": "c",
+        "assets.h": "c",
+        "*.tcc": "c",
+        "chrono": "c",
+        "functional": "c",
+        "string_view": "c",
+        "random": "c",
+        "istream": "c",
+        "limits": "c",
+        "numeric": "c",
+        "algorithm": "c",
+        "math.h": "c",
+        "mesh.h": "c",
+        "utils.h": "c",
+        "vec2.h": "c",
+        "su32a.h": "c",
+        "texture.h": "c",
+        "system_error": "c",
+        "material_library.h": "c"
+    }
+}

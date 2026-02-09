@@ -1,0 +1,40 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/SDL2"
+            ],
+            "defines": [],
+            "compilerPath": null,
+            "cStandard": "c11",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                "-Wall",
+                "-Wextra",
+                "-Wpedantic",
+                "-Werror",
+                "-Wformat=2",
+                "-Wno-unused-parameter",
+                "-Wshadow",
+                "-Wwrite-strings",
+                "-Wstrict-prototypes",
+                "-Wold-style-definition",
+                "-Wredundant-decls",
+                "-Wnested-externs",
+                "-Wmissing-include-dirs"
+            ],
+            "compileCommands": "${workspaceFolder}/build_debug/compile_commands.json",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ],
+    "version": 4
+}
