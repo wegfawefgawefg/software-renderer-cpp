@@ -16,7 +16,11 @@ struct Settings {
 
     // Physics.
     float player_radius = 0.35f;
-    float ground_normal_y = 0.55f;
+    // Walkable slope threshold: treat contacts with normal.y > this as "ground".
+    // This is cos(max_slope_angle_deg). For 45 degrees, cos(45deg) ~= 0.707.
+    float ground_normal_y = 0.707f;
+    float ground_snap_dist = 0.10f; // how far below feet we still "snap" to ground
+    float max_step_up = 0.25f;      // allow stepping up small ledges/stairs
     float max_dt = 0.05f;
     int max_substeps = 8;
     float min_substep = 0.05f;
@@ -31,6 +35,9 @@ struct Settings {
     float status_cam_angle_offset_rad = 0.0f; // 0 = in front of the player (look back at face)
     float status_cam_target_right = 0.75f;    // look a bit to player's right -> player appears left
     float status_cam_target_up = 1.15f;       // bias up so the player sits lower in frame
+
+    // Animation tuning.
+    float run_anim_speed_mul = 1.35f; // scaled by player move speed (sprint animates faster)
 };
 
 } // namespace app

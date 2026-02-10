@@ -38,6 +38,10 @@ struct Game {
     // Camera mode (hold Tab for status camera).
     float status_cam_alpha = 0.0f; // 0=normal, 1=status
 
+    // Render-facing yaw (so the character can face movement direction while camera/yaw can be
+    // controlled independently).
+    float model_yaw = 0.0f;
+
     // Entity slots.
     int castle_entity = 0;
     int player_entity = 1;

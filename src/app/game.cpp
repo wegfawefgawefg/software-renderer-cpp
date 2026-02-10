@@ -130,10 +130,20 @@ Game init_game(sr::assets::AssetStore& store, const Settings& settings) {
                       sr::math::mul(sr::math::Mat4::scale(sr::math::Vec3{p_scale, p_scale, p_scale}),
                                     rot_fix));
 
-    // Player.
-    g.player.radius = settings.player_radius;
+    // Player collider. Our physics position is the sphere center, while the render mesh is placed
+    // with its feet at the origin. Fit the radius to the mesh so feet don't float.
+    {
+        const float h = settings.mario_height_units; // after scaling
+        const float w = (p_mx.x - p_mn.x) * p_scale;
+        const float d = (p_mx.z - p_mn.z) * p_scale;
+        float r_fit = 0.5f * std::max(w, d); // half of max horizontal extent
+        // Clamp to something character-like.
+        r_fit = std::clamp(r_fit, 0.15f * h, 0.35f * h);
+    g.player.radius = r_fit;
+    }
     g.player.yaw = 3.14159265f;
     g.player.pitch = -0.25f;
+    g.model_yaw = g.player.yaw;
 
     // Spawn: raycast down at origin, starting above the castle.
     float castle_h_world = (castle_mx.y - castle_mn.y) * castle_scale;
