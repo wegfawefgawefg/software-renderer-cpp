@@ -19,8 +19,10 @@ struct Settings {
     // Walkable slope threshold: treat contacts with normal.y > this as "ground".
     // This is cos(max_slope_angle_deg). For 45 degrees, cos(45deg) ~= 0.707.
     float ground_normal_y = 0.707f;
+    float ground_hysteresis = 0.08f; // allow slightly worse normals before dropping ground
     float ground_snap_dist = 0.10f; // how far below feet we still "snap" to ground
     float max_step_up = 0.25f;      // allow stepping up small ledges/stairs
+    float jump_coyote_time = 0.10f; // seconds
     float max_dt = 0.05f;
     int max_substeps = 8;
     float min_substep = 0.05f;

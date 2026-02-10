@@ -42,6 +42,12 @@ struct Game {
     // controlled independently).
     float model_yaw = 0.0f;
 
+    // Animation-only grounding grace to prevent run/idle <-> jump flicker on downhill slopes.
+    float anim_ground_grace = 0.0f; // seconds remaining
+
+    // Jump "coyote time": allow jumping shortly after losing ground contact.
+    float jump_grace = 0.0f; // seconds remaining
+
     // Entity slots.
     int castle_entity = 0;
     int player_entity = 1;

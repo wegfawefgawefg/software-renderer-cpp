@@ -33,11 +33,13 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
 
     const float move_mag = std::sqrt(desired_vel.x * desired_vel.x + desired_vel.z * desired_vel.z);
 
-    // Jump.
-    if ((keys[SDL_SCANCODE_SPACE]) && g.player.grounded) {
+    // Jump: allow "coyote time" so small ground-contact jitter doesn't kill jumps on slopes.
+    const bool can_jump = g.player.grounded || (g.jump_grace > 0.0f);
+    if ((keys[SDL_SCANCODE_SPACE]) && can_jump) {
         g.player.vel.y = g.player.jump_speed;
         g.player.grounded = false;
         jumped_this_frame = true;
+        g.jump_grace = 0.0f;
     }
 
     // Gravity.
@@ -81,8 +83,21 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
 
     // Grounded if we had a sufficiently up-facing contact this frame (and we didn't just jump).
     // Also require not moving upward (prevents "grounded" at jump start).
-    g.player.grounded = (!jumped_this_frame) && (best_ny > settings.ground_normal_y) &&
-                        (g.player.vel.y <= 0.25f);
+    bool grounded_now = (!jumped_this_frame) && (best_ny > settings.ground_normal_y);
+    // Hysteresis: if we were grounded last frame, keep grounding a bit longer even if the normal
+    // momentarily dips (common when descending low-poly slopes).
+    if (!grounded_now && was_grounded && !jumped_this_frame) {
+        if (best_ny > (settings.ground_normal_y - settings.ground_hysteresis) &&
+            g.player.vel.y <= 2.0f) {
+            grounded_now = true;
+        }
+    }
+    g.player.grounded = grounded_now;
+    if (g.player.grounded) {
+        g.jump_grace = settings.jump_coyote_time;
+    } else {
+        g.jump_grace = std::max(0.0f, g.jump_grace - dt);
+    }
 
     // Walk friction (no sliding) + move along slope plane when grounded.
     if (g.player.grounded) {
@@ -138,7 +153,15 @@ void step_game(Game& g, const Settings& settings, const AppToggles& toggles, con
     // Avoid animation flicker when we momentarily lose ground contact while going down slopes.
     // Only treat as airborne if vertical speed is meaningful.
     const float vy = g.player.vel.y;
-    const bool really_airborne = (!g.player.grounded) && (vy > 0.75f || vy < -0.75f);
+    if (jumped_this_frame) {
+        g.anim_ground_grace = 0.0f;
+    } else if (g.player.grounded) {
+        g.anim_ground_grace = 0.12f;
+    } else {
+        g.anim_ground_grace = std::max(0.0f, g.anim_ground_grace - dt);
+    }
+    const bool anim_grounded = g.player.grounded || (g.anim_ground_grace > 0.0f);
+    const bool really_airborne = (!anim_grounded) && (vy > 0.75f || vy < -0.75f);
     if (really_airborne) {
         want = 2;
     } else if (move_mag > 0.1f) {
